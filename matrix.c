@@ -226,20 +226,98 @@ void write_trail(char_trail* trail, char* buffer, int width, int height) {
 }
 
 
+// write all the trails to the intermediate buffer
+void write_all_trails(char_trail** trails, char* buffer, int width, int height) {
+    // iterate through list of trails, create new instances if slots are empty,
+    // otherwise iterate & write into intermediate buffer
+    for (int i = 0; i < MAX_NUM_TRAILS; i++) {
+
+        // spawning new trails in free slots
+        if (trails[i] == NULL) {
+            if (((float)rand() / (float)RAND_MAX) < INIT_CHANCE) {
+                trails[i] = create_trail(rand() % width);
+            }
+            // process next trail
+            continue;
+        }
+
+        // update trails
+        // the logic around update_trail is for speed control of the trails
+        trails[i]->counter += SPEED;
+        while (trails[i]->counter >= 1.0) {
+            update_trail(trails[i]);
+            trails[i]->counter -= 1.0;
+        }
+
+        // freeing trails that have gone offscreen
+        if ((int)(trails[i]->y - trails[i]->length) > height) {
+            free(trails[i]);
+            trails[i] = NULL;
+            // process next trail
+        }
+
+        // writing trails into the intermediate buffer
+        else {
+            write_trail(trails[i], buffer, width, height);
+        }
+    }
+}
+
+
+// write intermediate buffer to screen buffer, returns number of bytes written
+int write_screen_buffer(char* buffer, char* screen_buffer, int width, int height) {
+    // writing from the intermediate buffer into the screen buffer
+    // as the intermediate buffer is composed of 32 byte wide , and utf-8 is not constant width,
+    // we can iterate through "buffer", but must track the pointer to the byte being writen
+    // in screen_buffer
+    int ptr = 0;
+    int num_characters = 0;
+    for (int i = 0; i < (width * height); i++) {
+        // if a string has been written to a slot
+        if ((num_characters % (width)) == 0) {
+            #ifndef _WIN32
+                screen_buffer[ptr] = '\n';
+                ptr++;
+            #endif
+        }
+
+        if (buffer[i*32]) {
+            // functionally equivalent to strncpy, but I need the # of bytes written afterward to increment
+            // the pointer to the head of screen_buffer
+            int tmp_ptr = 0;
+            while (tmp_ptr < 32 && buffer[(i*32) + tmp_ptr] != 0) {
+                screen_buffer[ptr + tmp_ptr] = buffer[(i*32) + tmp_ptr];
+                tmp_ptr++;
+            }
+            ptr += tmp_ptr;
+        }
+        // skip empty intermediate buffer slots as the
+        // screen buffer is filled with spaces by default
+        else {
+            ptr++;
+        }
+        num_characters++;
+    }
+    return ptr;
+}
+
+
+// handles interrupt signals, exits cleanly
 void ctrlc_handler(int signal_num) {printf(ANSI_EXIT_CLEANUP); (void)signal_num; exit(0); }
 
 
 int main() {
     #ifdef _WIN32
-    // windows specific fixes for ANSI sequences, enabling utf-8 output
-    if (win_fixes()) {
-        printf(ANSI_EXIT_CLEANUP);
-        printf("Not supported");
-        exit(0);
-    }
+        // windows specific fixes for ANSI sequences, enabling utf-8 output
+        if (win_fixes()) {
+            printf(ANSI_EXIT_CLEANUP);
+            printf("Not supported");
+            exit(0);
+        }
     #endif
 
-    signal(SIGINT, ctrlc_handler);
+    signal(SIGINT,  ctrlc_handler);
+    signal(SIGKILL, ctrlc_handler);
 
     printf(ANSI_SETUP_CONSOLE);
 
@@ -269,12 +347,12 @@ int main() {
 
         // reallocate buffers according to screen size
         screen_buffer = (char*)realloc(screen_buffer, width * height * 32);
-        buffer = (char*)realloc(buffer, width * height * 32);
+        buffer        = (char*)realloc(buffer,        width * height * 32);
 
         // exit if buffers leak
         if (screen_buffer == NULL || buffer == NULL) {
             printf(ANSI_EXIT_CLEANUP);
-            printf("realloc failed (%dx%d)", width, height);
+            printf("Memory allocation failed (%dx%d)", width, height);
             return 0;
         }
 
@@ -282,72 +360,9 @@ int main() {
         memset(screen_buffer, (char)0x20, width * height * 32);
         memset(buffer, 0, width * height * 32);
 
-        // iterate through list of trails, create new instances if slots are empty,
-        // otherwise iterate & write into intermediate buffer
-        for (int i = 0; i < MAX_NUM_TRAILS; i++) {
+        write_all_trails(trails, buffer, width, height);
 
-            // spawning new trails in free slots
-            if (trails[i] == NULL) {
-                if (((float)rand() / (float)RAND_MAX) < INIT_CHANCE) {
-                    trails[i] = create_trail(rand() % width);
-                }
-                // process next trail
-                continue;
-            }
-
-            // update trails
-            // the logic around update_trail is for speed control of the trails
-            trails[i]->counter += SPEED;
-            while (trails[i]->counter >= 1.0) {
-                update_trail(trails[i]);
-                trails[i]->counter -= 1.0;
-            }
-
-            // freeing trails that have gone offscreen
-            if ((int)(trails[i]->y - trails[i]->length) > height) {
-                free(trails[i]);
-                trails[i] = NULL;
-                // process next trail
-            }
-
-            // writing trails into the intermediate buffer
-            else {
-                write_trail(trails[i], buffer, width, height);
-            }
-        }
-
-        // writing from the intermediate buffer into the screen buffer
-        // as the intermediate buffer is composed of 32 byte wide , and utf-8 is not constant width,
-        // we can iterate through "buffer", but must track the pointer to the byte being writen
-        // in screen_buffer
-        int ptr = 0;
-        int num_characters = 0;
-        for (int i = 0; i < (width * height); i++) {
-            // if a string has been written to a slot
-            if ((num_characters % (width)) == 0) {
-                #ifndef _WIN32
-                    screen_buffer[ptr] = '\n';
-                    ptr++;
-                #endif
-            }
-
-            if (buffer[i*32]) {
-                // functionally equivalent to strncpy, but I need the # of bytes written afterward to increment
-                // the pointer to the head of screen_buffer
-                int tmp_ptr = 0;
-                while (tmp_ptr < 32 && buffer[(i*32) + tmp_ptr] != 0) {
-                    screen_buffer[ptr + tmp_ptr] = buffer[(i*32) + tmp_ptr];
-                    tmp_ptr++;
-                }
-                ptr += tmp_ptr;
-            }
-            // skip empty intermediate buffer slots as the
-            // screen buffer is filled with spaces by default
-            else {
-                ptr++;
-            }
-            num_characters++;
-        }
+        int ptr = write_screen_buffer(buffer, screen_buffer, width, height);
 
         printf(ANSI_RESET_CURSOR);  // moves cursor to top-left of terminal
         fwrite(screen_buffer, 1, ptr, stdout);
