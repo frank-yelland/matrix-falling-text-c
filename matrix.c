@@ -7,7 +7,7 @@
 #include <sys/time.h>
 
 #define CHARACTERS       "0123456789*+-<=>|"
-#define EXIT_CLEANUP     printf("\x1b[2J\x1b[H\x1b[?25h");
+#define EXIT_CLEANUP     printf("\x1b[2J\x1b[H\x1b[?25h\x1b[?1049l");
 
 // ======- options -======
 // speed of trails falling (framerate dependant)
@@ -200,7 +200,7 @@ int main() {
     signal(SIGINT, ctrlc_handler);
 
     // clear screen, reset cursor, hide cursor
-    printf("\x1b[2J\x1b[H\x1b[?25l");
+    printf("\x1b[?1049h\x1b[2J\x1b[H\x1b[?25l");
 
     struct timeval frame_start, frame_end;
     // array storing the trails
