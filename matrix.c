@@ -141,7 +141,7 @@ uint32_t generate_random_char() {
     if ((rand() % 5) <= 3) {  // 3/5 chance of generating a half width katakana
         // 0xFF60 -> half width katakana plane
         // we want characters FF66 - FF9D, so we mod by 0x38 and add 0x06
-        return (uint32_t)(0xff6 + (rand() % 0x38) + 0x06);
+        return (uint32_t)(0xff60 + (rand() % 0x38) + 0x06);
     }
     // otherwise return a random ascii character from a preselected set
     return (uint32_t)CHARACTERS[rand() % (sizeof(CHARACTERS) - 1)];
