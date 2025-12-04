@@ -317,7 +317,7 @@ int main() {
     #endif
 
     signal(SIGINT,  ctrlc_handler);
-    signal(SIGKILL, ctrlc_handler);
+    signal(SIGTERM, ctrlc_handler);
 
     printf(ANSI_SETUP_CONSOLE);
 
