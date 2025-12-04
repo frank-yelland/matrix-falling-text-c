@@ -23,28 +23,28 @@
 
 
 // character trail
-struct char_trail {
+typedef struct char_trail {
     // top left is 0,0 increasing as you go down or right
     float    counter;                // used for speed control
     uint32_t x;                      // screen y value of the head of the trail.
     uint32_t y;                      // screen x value of trail
     uint32_t length;                 // length of trail, converted to bytes
     uint32_t characters[MAX_TRAIL];  // list of characters in trail
-};
+} char_trail;
 
 
 // rgb colour ¯\_(ツ)_/¯
-struct rgb {
+typedef struct rgb {
     uint8_t red;
     uint8_t green;
     uint8_t blue;
-};
+} rgb;
 
 
-struct screen_size {
+typedef struct screen_size {
     int width;
     int height;
-};
+} screen_size;
 
 
 #ifdef _WIN32
@@ -70,7 +70,7 @@ struct screen_size {
     }
 
     // gets the current terminal size. sets it to 80x24 if malformed or nulled
-    struct screen_size get_screen_size() {
+    screen_size get_screen_size() {
         CONSOLE_SCREEN_BUFFER_INFO csbi;
         int width, height;
         GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
@@ -78,21 +78,21 @@ struct screen_size {
         height = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
         if (width <= 0) { width = 80; }
         if (height <= 0) { height = 24; }
-        struct screen_size current_size = {width, height};
+        screen_size current_size = {width, height};
         return current_size;
     }
 #else
     // ioctl is supported on linux, mac & bsd - assume it works everywhere
     #include <sys/ioctl.h>
     // gets the current terminal size. sets it to 80x24 if malformed or nulled
-    struct screen_size get_screen_size() {
+    screen_size get_screen_size() {
         struct winsize size;
         ioctl(STDOUT_FILENO, TIOCGWINSZ, &size);
         int width = size.ws_col;
         int height = size.ws_row;
         if (width <= 0) { width = 80; }
         if (height <= 0) { height = 24; }
-        struct screen_size current_size = {width, height};
+        screen_size current_size = {width, height};
         return current_size;
     }
 #endif
@@ -102,9 +102,9 @@ struct screen_size {
 // does not write null terminator
 // returns number of bytes written
 int write_utf8_buf(const size_t max_output_length, char* output, const size_t input_length, const uint32_t* input) {
-    int bytes_written = 0;
+    size_t bytes_written = 0;
 
-    for (int i = 0; i < input_length; ++i) {
+    for (size_t i = 0; i < input_length; ++i) {
         // this check ought to better
         if (bytes_written >= max_output_length) {
             return bytes_written;
@@ -132,7 +132,7 @@ int write_utf8_buf(const size_t max_output_length, char* output, const size_t in
             bytes_written += 4;
         }
     }
-    return bytes_written;
+    return (int)bytes_written;
 }
 
 
@@ -149,13 +149,13 @@ uint32_t generate_random_char() {
 
 
 // create character trail object
-struct char_trail* create_trail(int x) {
-    struct char_trail* trail = (struct char_trail*)malloc(sizeof(struct char_trail));
+char_trail* create_trail(int x) {
+    char_trail* trail = (char_trail*)malloc(sizeof(char_trail));
     trail->counter = 0.0;
     trail->length = (rand() % (MAX_TRAIL - MIN_TRAIL)) + MIN_TRAIL;
     trail->x = x;
     trail->y = -trail->length;
-    for (int i = 0; i < trail->length; ++i) {
+    for (uint32_t i = 0; i < trail->length; ++i) {
         trail->characters[i] = generate_random_char();
     }
     return trail;
@@ -163,28 +163,28 @@ struct char_trail* create_trail(int x) {
 
 
 // calculate colour for given character in a trail
-struct rgb calc_colour_from_pos(const int index, const int length) {
+rgb calc_colour_from_pos(const int index, const int length) {
     if (index == 0) {
-        const struct rgb colour = {200, 200, 200};
+        const rgb colour = {200, 200, 200};
         return colour;
     }
     const double coefficient = 1.0 - ((float)index / ((float)length * 1.1));
-    const struct rgb colour = {(uint8_t)(40.0  * coefficient),
-                               (uint8_t)(255.0 * coefficient),
-                               (uint8_t)(40.0  * coefficient)};
+    const rgb colour = {(uint8_t)(40.0  * coefficient),
+                        (uint8_t)(255.0 * coefficient),
+                        (uint8_t)(40.0  * coefficient)};
     return colour;
 }
 
 
 // update trail (iterate position, move characters)
-void update_trail(struct char_trail* trail) {
+void update_trail(char_trail* trail) {
     trail->y += 1.0;
     memmove(trail->characters + 1, trail->characters, (trail->length - 1) * sizeof(trail->characters[0]));
     trail->characters[0] = generate_random_char();
 }
 
 
-void ctrlc_handler(int signal_num) {EXIT_CLEANUP; exit(0); }
+void ctrlc_handler(int signal_num) {EXIT_CLEANUP; (void)signal_num; exit(0); }
 
 
 int main() {
@@ -204,8 +204,8 @@ int main() {
 
     struct timeval frame_start, frame_end;
     // array storing the trails
-    struct char_trail* trails[MAX_NUM_TRAILS] = {};
-    struct screen_size current_size = get_screen_size();
+    char_trail* trails[MAX_NUM_TRAILS] = {};
+    screen_size current_size = get_screen_size();
     int width = current_size.width;
     int height = current_size.height;
 
@@ -266,14 +266,14 @@ int main() {
                 }
                 // writing trail characters into the buffer
                 else {
-                    for (int j = 0; j < (trails[i]->length - 1); j++) {
+                    for (uint32_t j = 0; j < (trails[i]->length - 1); j++) {
                         // calculates index into the intermedaite buffer
                         uint32_t index = (trails[i]->x + ((trails[i]->y - j) * width)) * 32;
-                        if (index <= ((width * height * 32)-32) && index > 0) {
+                        if (index <= (uint32_t)((width * height * 32)-32) && index > 0) {
                             // clearing prev write if overwriting
                             memset(&(buffer[index]), 0, 32);
                             // calculating and writing colour as ANSI control code
-                            struct rgb colour = calc_colour_from_pos(j, (int)trails[i]->length);
+                            rgb colour = calc_colour_from_pos(j, (int)trails[i]->length);
                             int byte_offset = snprintf(&buffer[index], 24, "\x1b[38;2;%d;%d;%dm", colour.red, colour.green, colour.blue);
                             // take character from codepoint form, write it into the buffer as utf8 string
                             byte_offset += write_utf8_buf(32, &buffer[index + byte_offset], 1, &trails[i]->characters[j]);
@@ -328,4 +328,5 @@ int main() {
             usleep(duration);
         }
     }
+    return 0;
 }
